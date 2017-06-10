@@ -1,12 +1,28 @@
 package ro.dutylabs.minidroneplayground;
 
 import android.annotation.SuppressLint;
+import android.content.ComponentName;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.content.ServiceConnection;
+import android.os.IBinder;
+import android.support.v4.content.LocalBroadcastManager;
 import android.support.v7.app.ActionBar;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.os.Handler;
 import android.view.MotionEvent;
 import android.view.View;
+
+import com.parrot.arsdk.ARSDK;
+import com.parrot.arsdk.ardiscovery.ARDiscoveryDevice;
+import com.parrot.arsdk.ardiscovery.ARDiscoveryDeviceService;
+import com.parrot.arsdk.ardiscovery.ARDiscoveryService;
+import com.parrot.arsdk.ardiscovery.receivers.ARDiscoveryServicesDevicesListUpdatedReceiver;
+import com.parrot.arsdk.ardiscovery.receivers.ARDiscoveryServicesDevicesListUpdatedReceiverDelegate;
+
+import java.util.List;
 
 /**
  * An example full-screen activity that shows and hides the system UI (i.e.
@@ -31,13 +47,23 @@ public class MainActivity extends AppCompatActivity {
      */
     private static final int UI_ANIMATION_DELAY = 300;
 
+    /// load the sdk
+    static {
+        ARSDK.loadSDKLibs();
+    }
+
     private View mContentView;
     private View mControlsView;
     private boolean mVisible;
 
+    private ARDiscoveryService mArdiscoveryService;
+    private ServiceConnection mArdiscoveryServiceConnection;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        System.out.println("onCreate()");
 
         setContentView(R.layout.activity_main);
 
@@ -57,8 +83,59 @@ public class MainActivity extends AppCompatActivity {
         // Upon interacting with UI controls, delay any scheduled hide()
         // operations to prevent the jarring behavior of controls going away
         // while interacting with the UI.
-        findViewById(R.id.dummy_button).setOnTouchListener(mDelayHideTouchListener);
+        findViewById(R.id.find_drone_button).setOnTouchListener(mDelayHideTouchListener);
+        initDiscoveryService();
+        registerReceivers();
     }
+
+    private void initDiscoveryService() {
+        if(mArdiscoveryServiceConnection == null) {
+            mArdiscoveryServiceConnection = new ServiceConnection() {
+                @Override
+                public void onServiceConnected(ComponentName componentName, IBinder iBinder) {
+                    mArdiscoveryService = ((ARDiscoveryService.LocalBinder) iBinder).getService();
+                    startDiscovery();
+                }
+
+                @Override
+                public void onServiceDisconnected(ComponentName componentName) {
+                    mArdiscoveryService = null;
+                }
+            };
+        }
+        if(mArdiscoveryService == null) {
+            Intent i = new Intent(getApplicationContext(), ARDiscoveryService.class);
+            getApplicationContext().bindService(i, mArdiscoveryServiceConnection, Context.BIND_AUTO_CREATE);
+        } else {
+            startDiscovery();
+        }
+    }
+
+    private void startDiscovery() {
+        if(mArdiscoveryService != null)
+            mArdiscoveryService.start();
+    }
+
+    private void registerReceivers() {
+        ARDiscoveryServicesDevicesListUpdatedReceiver receiver =
+                new ARDiscoveryServicesDevicesListUpdatedReceiver(mDiscoveryDeletegate);
+        LocalBroadcastManager localBroadcastManager = LocalBroadcastManager.getInstance(getApplicationContext());
+        localBroadcastManager.registerReceiver(receiver,
+                new IntentFilter(ARDiscoveryService.kARDiscoveryServiceNotificationServicesDevicesListUpdated));
+    }
+
+    private final ARDiscoveryServicesDevicesListUpdatedReceiverDelegate mDiscoveryDeletegate =
+            new ARDiscoveryServicesDevicesListUpdatedReceiverDelegate() {
+                @Override
+                public void onServicesDevicesListUpdated() {
+                    System.out.println("Updated()");
+                    if(mArdiscoveryService != null) {
+                        List<ARDiscoveryDeviceService> deviceList = mArdiscoveryService.getDeviceServicesArray();
+                        System.out.println("Device List: ");
+                        System.out.println(deviceList);
+                    }
+                }
+            };
 
     @Override
     protected void onPostCreate(Bundle savedInstanceState) {
