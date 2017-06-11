@@ -131,6 +131,11 @@ public class MainActivity extends AppCompatActivity {
                     System.out.println("Updated()");
                     if(mArdiscoveryService != null) {
                         List<ARDiscoveryDeviceService> deviceList = mArdiscoveryService.getDeviceServicesArray();
+                        /// TODO
+                        /// after session :(
+                        /// this list will become available as soon as you connect to the drone through wifi
+                        /// next: createa a listview where to show this List (usually with one item)
+                        /// then, start an activity where you can control the drone
                         System.out.println("Device List: ");
                         System.out.println(deviceList);
                     }
